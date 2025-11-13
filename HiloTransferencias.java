@@ -23,13 +23,13 @@ class HiloTransferencia implements Runnable {
 	static final String SQL_MIRA_FONDOS = "SELECT saldo FROM cuentas WHERE id=?";
 	static final String SQL_INGRESA = "UPDATE cuentas SET saldo=saldo+? WHERE id=?";
 	// si la comprobación de fondos y la retirada se hacen por separado:
-	static final boolean RETIRA_EN_DOS_PASOS = true; 
+	static final boolean RETIRA_EN_DOS_PASOS = false;
 	static final String SQL_RETIRA = RETIRA_EN_DOS_PASOS ?
 			"UPDATE cuentas set saldo=saldo-? WHERE id=?" :
 			"UPDATE cuentas SET saldo=saldo-? WHERE id=? AND saldo>=?"; 
 	static final boolean TRANSACCIÓN = false;
 	// solo tiene sentido en transacciones:
-		static final boolean REORDENA_QUERIES = false;	
+		static final boolean REORDENA_QUERIES = false;
 
 	public HiloTransferencia(Banco b, int from, int max) throws SQLException {
 		banco = b;
@@ -62,8 +62,9 @@ class HiloTransferencia implements Runnable {
 				mensajeSalida = "Saliendo por banco cerrado. Hilo " + numHilo;
 				break;
 			}
-			banco.transfiere(cuentaOrigen, cuentaDestino, cantidad, conexión, sqlMiraFondos, sqlRetira, sqlIngresa,
-					RETIRA_EN_DOS_PASOS, TRANSACCIÓN, REORDENA_QUERIES);
+//			banco.transfiere(cuentaOrigen, cuentaDestino, cantidad, conexión, sqlMiraFondos, sqlRetira, sqlIngresa,
+//					RETIRA_EN_DOS_PASOS, TRANSACCIÓN, REORDENA_QUERIES);
+            banco.transfiere(cuentaOrigen, cuentaDestino, cantidad, conexión);
 		}
 
 		if (mensajeSalida.startsWith("Terminadas"))

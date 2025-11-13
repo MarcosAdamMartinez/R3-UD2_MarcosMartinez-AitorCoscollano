@@ -1,9 +1,4 @@
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 
 public class Banco {
 	private final int saldoInicial;
@@ -34,75 +29,97 @@ public class Banco {
 		}
 	}
 
-	public void transfiere(int origen, int destino, int cantidad, Connection conexiónHilo,
-			PreparedStatement sqlMiraFondos, PreparedStatement sqlRetira, PreparedStatement sqlIngresa,
-			boolean retiraEnDosPasos, boolean transacción, boolean reordena) {
+//	public void transfiere(int origen, int destino, int cantidad, Connection conexiónHilo,
+//			PreparedStatement sqlMiraFondos, PreparedStatement sqlRetira, PreparedStatement sqlIngresa,
+//			boolean retiraEnDosPasos, boolean transacción, boolean reordena) {
+//
+//		try {
+//			if (transacción) conexiónHilo.setAutoCommit(false);
+//			sqlMiraFondos.setInt(1, origen);
+//			sqlRetira.setFloat(1, cantidad);
+//			sqlRetira.setInt(2, origen);
+//			if (!retiraEnDosPasos) sqlRetira.setFloat(3, cantidad);
+//			sqlIngresa.setFloat(1, cantidad);
+//			sqlIngresa.setInt(2, destino);
+//			boolean faltaSaldo = true;
+//
+//			if (retiraEnDosPasos) {
+//				ResultSet res = sqlMiraFondos.executeQuery();
+//				if (res.next() && res.getFloat(1) >= cantidad) {
+//					// reordenamos para evitar interbloqueos: explicar en clase
+//					if (origen < destino || !transacción || !reordena) { // orden normal
+//						sqlRetira.executeUpdate();
+//						sqlIngresa.executeUpdate();
+//					} else { // orden invertido:
+//						sqlIngresa.executeUpdate();
+//						sqlRetira.executeUpdate();
+//					}
+//					faltaSaldo = false;
+//				}
+//			} else {
+//				if (sqlRetira.executeUpdate() > 0) {
+//					sqlIngresa.executeUpdate();
+//					faltaSaldo = false;
+//				}
+//			}
+//
+//			if (faltaSaldo) {
+//				System.err.printf("No puedo tranferir %d de %d a %d por falta de fondos\n", cantidad, origen, destino);
+//			}
+//
+//			if (transacción) conexiónHilo.commit();
+//		} catch (SQLException e) {
+//			System.err.println("Problema SQL " + e.getMessage());
+//			try {
+//				conexiónHilo.rollback();
+//			} catch (SQLException e1) {
+//				System.err.println("Problema haciendo rollback " + e.getMessage());
+//			}
+//		}
+//
+//		if (transacción) {
+//			try {
+//				conexiónHilo.setAutoCommit(true);
+//			} catch (SQLException e) {
+//				System.err.println("Problema haciendo autocommit " + e.getMessage());
+//			}
+//		}
+//
+//		try {
+//			// Comprueba fondos tras la operación para detectar descubiertos:
+//			ResultSet res2 = sqlMiraFondos.executeQuery();
+//			if (!res2.next() || res2.getFloat(1) < 0) {
+//				System.err.println("Descubierto en cuenta " + origen + " saldo: " + res2.getFloat(1));
+//			}
+//		} catch (SQLException e) {
+//			System.err.println("Problema SQL bis " + e.getMessage());
+//		}
+//
+//	}
 
-		try {
-			if (transacción) conexiónHilo.setAutoCommit(false);
-			sqlMiraFondos.setInt(1, origen);
-			sqlRetira.setFloat(1, cantidad);
-			sqlRetira.setInt(2, origen);
-			if (!retiraEnDosPasos) sqlRetira.setFloat(3, cantidad);
-			sqlIngresa.setFloat(1, cantidad);
-			sqlIngresa.setInt(2, destino);
-			boolean faltaSaldo = true;
+    public void transfiere(int origen, int destino, int cantidad, Connection conexionHilo) {
+        try {
+            PreparedStatement cs = conexionHilo.prepareStatement("{ CALL transferir(?, ?, ?) }");
+            cs.setInt(1, origen);
+            cs.setInt(2, destino);
+            cs.setFloat(3, cantidad);
+            cs.execute();
 
-			if (retiraEnDosPasos) {
-				ResultSet res = sqlMiraFondos.executeQuery();
-				if (res.next() && res.getFloat(1) >= cantidad) {
-					// reordenamos para evitar interbloqueos: explicar en clase
-					if (origen < destino || !transacción || !reordena) { // orden normal
-						sqlRetira.executeUpdate();
-						sqlIngresa.executeUpdate();
-					} else { // orden invertido:
-						sqlIngresa.executeUpdate();
-						sqlRetira.executeUpdate();
-					}
-					faltaSaldo = false;
-				}
-			} else {
-				if (sqlRetira.executeUpdate() > 0) {
-					sqlIngresa.executeUpdate();
-					faltaSaldo = false;
-				}
-			}
+            // Verificamos que no haya descubierto:
+            PreparedStatement sqlMiraFondos = conexionHilo.prepareStatement("SELECT saldo FROM cuentas WHERE id = ?");
+            sqlMiraFondos.setInt(1, origen);
+            ResultSet res = sqlMiraFondos.executeQuery();
+            if (res.next() && res.getFloat(1) < 0) {
+                System.err.println("Descubierto en cuenta " + origen + " saldo: " + res.getFloat(1));
+            }
 
-			if (faltaSaldo) {
-				System.err.printf("No puedo tranferir %d de %d a %d por falta de fondos\n", cantidad, origen, destino);
-			}
+        } catch (SQLException e) {
+            System.err.println("Error en transferencia: " + e.getMessage());
+        }
+    }
 
-			if (transacción) conexiónHilo.commit();
-		} catch (SQLException e) {
-			System.err.println("Problema SQL " + e.getMessage());
-			try {
-				conexiónHilo.rollback();
-			} catch (SQLException e1) {
-				System.err.println("Problema haciendo rollback " + e.getMessage());
-			}
-		}
 
-		if (transacción) {
-			try {
-				conexiónHilo.setAutoCommit(true);
-			} catch (SQLException e) {
-				System.err.println("Problema haciendo autocommit " + e.getMessage());
-			}
-		}
-
-		try {
-			// Comprueba fondos tras la operación para detectar descubiertos:
-			ResultSet res2 = sqlMiraFondos.executeQuery();
-			if (!res2.next() || res2.getFloat(1) < 0) {
-				System.err.println("Descubierto en cuenta " + origen + " saldo: " + res2.getFloat(1));
-			}
-		} catch (SQLException e) {
-			System.err.println("Problema SQL bis " + e.getMessage());
-		}
-
-	}
-
-	public void comprueba() throws SQLException {
+    public void comprueba() throws SQLException {
 		int saldoTotal = 0;
 		Statement sql = conexión.createStatement();
 		ResultSet res = sql.executeQuery("SELECT SUM(saldo) FROM cuentas");
